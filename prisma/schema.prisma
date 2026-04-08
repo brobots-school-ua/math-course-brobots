@@ -1,0 +1,79 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../app/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id          Int              @id @default(autoincrement())
+  name        String
+  createdAt   DateTime         @default(now())
+  submissions Submission[]
+  progress    ModuleProgress[]
+}
+
+model Module {
+  id          Int              @id @default(autoincrement())
+  order       Int
+  title       String
+  description String
+  lessons     Lesson[]
+  progress    ModuleProgress[]
+}
+
+model Lesson {
+  id       Int    @id @default(autoincrement())
+  moduleId Int
+  module   Module @relation(fields: [moduleId], references: [id])
+  order    Int
+  title    String
+  theoryMd String
+  tasks    Task[]
+}
+
+model Task {
+  id          Int          @id @default(autoincrement())
+  lessonId    Int
+  lesson      Lesson       @relation(fields: [lessonId], references: [id])
+  order       Int
+  type        TaskType
+  question    String
+  options     String[]
+  correctIdx  Int?
+  correctAns  String?
+  tolerance   Float        @default(0.02)
+  hints       String[]
+  submissions Submission[]
+}
+
+enum TaskType {
+  QUIZ
+  PRACTICE
+}
+
+model Submission {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  user      User     @relation(fields: [userId], references: [id])
+  taskId    Int
+  task      Task     @relation(fields: [taskId], references: [id])
+  answer    String
+  isCorrect Boolean
+  hintsUsed Int      @default(0)
+  createdAt DateTime @default(now())
+}
+
+model ModuleProgress {
+  id             Int    @id @default(autoincrement())
+  userId         Int
+  user           User   @relation(fields: [userId], references: [id])
+  moduleId       Int
+  module         Module @relation(fields: [moduleId], references: [id])
+  masteryPercent Int    @default(0)
+
+  @@unique([userId, moduleId])
+}
