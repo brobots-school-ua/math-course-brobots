@@ -45,7 +45,7 @@ const LEVELS: LevelDef[] = [
     spells: ['arrows', 'fireball'],
     growthLabel: '+160 / хід',
     formula: 'армія(t) = 1200 + 160×t − сумарна_шкода',
-    hint: 'Щоб армія скорочувалась, шкода за хід має бути БІЛЬШЕ за 160. Стріли (70) самі не допоможуть!',
+    hint: 'Армія росте кожен хід. Чи встигає твоя атака за її ростом?',
   },
   {
     id: 2, name: 'Прискорення', badge: '🏃', color: 'from-orange-700 to-orange-500',
@@ -57,7 +57,7 @@ const LEVELS: LevelDef[] = [
     spells: ['arrows', 'fireball', 'blizzard'],
     growthLabel: '+300 / хід',
     formula: 'армія(t) = 2000 + 300×t − сумарна_шкода',
-    hint: 'Крижана буря коштує 80 монет, але наступний хід ріст = +150 замість +300. Рахуй: коли вигідніше її кидати?',
+    hint: 'Одне із заклинань впливає не тільки на шкоду. Може, варто спробувати його і подивитись що змінюється наступного ходу?',
   },
   {
     id: 3, name: 'Показниковий ріст', badge: '💀', color: 'from-red-900 to-red-700',
@@ -69,7 +69,7 @@ const LEVELS: LevelDef[] = [
     spells: ['arrows', 'fireball', 'blizzard', 'lightning'],
     growthLabel: '×1.8 / хід',
     formula: 'армія(t) = 2000 × 1.8^t − сумарна_шкода',
-    hint: 'Без атаки: 2000 → 3600 → 6480 → 11664... За 4 ходи армія у 10× більша. Потрібна Блискавка кожен хід!',
+    hint: 'Спробуй порахувати: якою буде армія через 3 ходи якщо не атакувати? А якщо атакувати слабко?',
   },
 ]
 
@@ -393,6 +393,11 @@ export default function ArmyGame() {
             </div>
             <div className="text-xs text-gray-500 mt-1">з {level.totalBudget} всього</div>
           </div>
+        </div>
+
+        {/* Growth formula */}
+        <div className="bg-gray-800 rounded-xl px-4 py-2 font-mono text-xs text-gray-300">
+          <span className="text-gray-500">формула: </span>{level.formula}
         </div>
 
         {/* Castle road */}
