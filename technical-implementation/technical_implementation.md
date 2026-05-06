@@ -393,6 +393,77 @@ JSON:`;
 
 > **MVP-спрощення:** на першому етапі можна обійтись без маркерів — просити учня фотографувати аркуш на рівній поверхні і показувати preview з рамкою перед відправкою. Маркери додати у Фазі 3.
 
+### Альтернативний підхід: Gemini Flash Lite (рекомендовано для початку)
+
+Замість Tesseract + Qwen2-VL (Ollama) можна використати **Gemini Flash Lite** — один мультимодальний виклик замінює весь пайплайн OCR + перевірки.
+
+**Ціна:** $0.25 / 1M вхідних токенів (текст + зображення + відео)
+**Розрахунок:** 1 бланк ≈ 500–1000 токенів → 1000 бланків ≈ $0.25–0.50
+
+| Варіант | Ціна / 1000 фото | Рукопис | Архітектура |
+|---|---|---|---|
+| Google Vision API | ~$1.50 | ⭐⭐⭐⭐⭐ | OCR тільки → потрібен LLM окремо |
+| Tesseract + Qwen2-VL | ~$0 (сервер!) | ⭐⭐ / ⭐⭐⭐⭐ | 2 кроки, потрібен GPU |
+| **Gemini Flash Lite** | **~$0.25–0.50** | **⭐⭐⭐⭐** | **1 виклик = OCR + перевірка** |
+
+**Флоу з Gemini Flash Lite:**
+
+```
+Фото бланку → вирізати поля (sharp) → Gemini Flash Lite → JSON результат
+```
+
+**Код інтеграції:**
+
+```typescript
+// lib/gemini-ocr.ts
+import { GoogleGenerativeAI } from '@google/generative-ai';
+
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
+
+export async function evaluateHandwrittenBlank(params: {
+  imageBuffer: Buffer;
+  taskStatement: string;
+  correctAnswer: number;
+  tolerance: number;
+}) {
+  const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash-lite-preview-06-17' });
+
+  const imageBase64 = params.imageBuffer.toString('base64');
+
+  const prompt = `
+Ти перевіряєш рукописну роботу учня.
+Задача: ${params.taskStatement}
+Правильна відповідь: ${params.correctAnswer} (допуск ±${params.tolerance * 100}%)
+
+Прочитай бланк і визнач:
+1. answer: число яке написав учень у полі [ВІДПОВІДЬ]
+2. isCorrect: чи правильна відповідь (з урахуванням допуску)
+3. errorType: CALCULATION / CONCEPTUAL / UNITS / NONE
+4. conclusionOk: чи правильно заповнено поле [ВИСНОВОК]
+5. feedback: одне речення для учня (українською)
+
+Відповідь тільки у JSON:
+{"answer": "...", "isCorrect": true/false, "errorType": "...", "conclusionOk": true/false, "feedback": "..."}
+`;
+
+  const result = await model.generateContent([
+    { inlineData: { mimeType: 'image/jpeg', data: imageBase64 } },
+    prompt,
+  ]);
+
+  return JSON.parse(result.response.text());
+}
+```
+
+**Коли використовувати Gemini Flash Lite замість Ollama:**
+- На початку проєкту (не потрібен GPU / Ollama на сервері)
+- Якщо шкільний VPS слабкий (< 8 ГБ RAM)
+- Для MVP — один API замінює весь локальний стек OCR
+
+**Коли перейти на Ollama:**
+- Кількість учнів > 100 і витрати на API зростають
+- Потрібна повна офлайн-незалежність
+
 ---
 
 ## 6. Інтеграція локального ШІ (Ollama)
