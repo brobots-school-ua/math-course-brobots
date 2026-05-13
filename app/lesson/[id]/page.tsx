@@ -37,6 +37,7 @@ export default async function LessonPage({
       correctAns: t.correctAns,
       tolerance: t.tolerance,
       hints: t.hints,
+      postContent: t.postContent ?? null,
     })),
   }
 

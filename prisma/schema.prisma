@@ -48,12 +48,14 @@ model Task {
   correctAns  String?
   tolerance   Float        @default(0.02)
   hints       String[]
+  postContent String?
   submissions Submission[]
 }
 
 enum TaskType {
   QUIZ
   PRACTICE
+  OFFLINE
 }
 
 model Submission {
@@ -65,6 +67,7 @@ model Submission {
   answer    String
   isCorrect Boolean
   hintsUsed Int      @default(0)
+  photoUrl  String?
   createdAt DateTime @default(now())
 }
 

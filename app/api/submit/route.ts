@@ -20,10 +20,24 @@ export async function POST(request: Request) {
   if (task.type === 'QUIZ') {
     isCorrect = Number(answer) === task.correctIdx
   } else if (task.type === 'PRACTICE') {
-    const studentNum = parseFloat(String(answer).replace(',', '.'))
-    const correctNum = parseFloat(task.correctAns ?? '0')
-    if (!isNaN(studentNum) && !isNaN(correctNum) && correctNum !== 0) {
-      isCorrect = Math.abs(studentNum - correctNum) / Math.abs(correctNum) <= task.tolerance
+    const correctAns = task.correctAns ?? '0'
+    // TIME format HH:MM — compare as total minutes with tolerance in minutes
+    if (/^\d{1,2}:\d{2}$/.test(correctAns)) {
+      const toMinutes = (t: string) => {
+        const [h, m] = t.split(':').map(Number)
+        return h * 60 + m
+      }
+      const studentStr = String(answer).trim()
+      if (/^\d{1,2}:\d{2}$/.test(studentStr)) {
+        isCorrect = Math.abs(toMinutes(studentStr) - toMinutes(correctAns)) <= task.tolerance
+      }
+    } else {
+      const studentNum = parseFloat(String(answer).replace(',', '.'))
+      const correctNum = parseFloat(correctAns)
+      if (!isNaN(studentNum) && !isNaN(correctNum)) {
+        const denom = Math.abs(correctNum) || 1
+        isCorrect = Math.abs(studentNum - correctNum) / denom <= task.tolerance
+      }
     }
   }
 

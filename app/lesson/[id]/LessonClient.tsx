@@ -5,13 +5,14 @@ import Link from 'next/link'
 
 type Task = {
   id: number
-  type: 'QUIZ' | 'PRACTICE'
+  type: 'QUIZ' | 'PRACTICE' | 'OFFLINE'
   question: string
   options: string[]
   correctIdx: number | null
   correctAns: string | null
   tolerance: number
   hints: string[]
+  postContent: string | null
 }
 
 type LessonData = {
@@ -22,18 +23,25 @@ type LessonData = {
   tasks: Task[]
 }
 
-type Stage = 'THEORY' | 'TASKS' | 'COMPLETE'
+type Stage = 'THEORY' | 'TASKS' | 'OFFLINE' | 'COMPLETE'
 
 export default function LessonClient({ lesson }: { lesson: LessonData }) {
   const [stage, setStage] = useState<Stage>('THEORY')
   const [taskIdx, setTaskIdx] = useState(0)
   const [hintsShown, setHintsShown] = useState(0)
   const [answer, setAnswer] = useState('')
+  const [timeHours, setTimeHours] = useState('')
+  const [timeMinutes, setTimeMinutes] = useState('')
   const [result, setResult] = useState<{ isCorrect: boolean; mastery: number } | null>(null)
   const [submitted, setSubmitted] = useState(false)
   const [finalMastery, setFinalMastery] = useState(0)
+  const [photoFile, setPhotoFile] = useState<File | null>(null)
+  const [photoUploaded, setPhotoUploaded] = useState(false)
+  const [photoUploading, setPhotoUploading] = useState(false)
 
-  const currentTask = lesson.tasks[taskIdx]
+  const regularTasks = lesson.tasks.filter(t => t.type !== 'OFFLINE')
+  const offlineTask = lesson.tasks.find(t => t.type === 'OFFLINE') ?? null
+  const currentTask = regularTasks[taskIdx]
 
   async function submitAnswer(ans: string) {
     if (submitted) return
@@ -54,15 +62,34 @@ export default function LessonClient({ lesson }: { lesson: LessonData }) {
   }
 
   function nextTask() {
-    if (taskIdx + 1 >= lesson.tasks.length) {
-      setStage('COMPLETE')
+    if (taskIdx + 1 >= regularTasks.length) {
+      if (offlineTask) {
+        setStage('OFFLINE')
+      } else {
+        setStage('COMPLETE')
+      }
     } else {
       setTaskIdx((i) => i + 1)
       setHintsShown(0)
       setAnswer('')
+      setTimeHours('')
+      setTimeMinutes('')
       setResult(null)
       setSubmitted(false)
+      setPhotoFile(null)
+      setPhotoUploaded(false)
     }
+  }
+
+  async function uploadPhoto() {
+    if (!photoFile || !offlineTask) return
+    setPhotoUploading(true)
+    const form = new FormData()
+    form.append('photo', photoFile)
+    form.append('taskId', String(offlineTask.id))
+    await fetch('/api/upload', { method: 'POST', body: form })
+    setPhotoUploaded(true)
+    setPhotoUploading(false)
   }
 
   // ── THEORY ─────────────────────────────────────────────────────────
@@ -118,9 +145,105 @@ export default function LessonClient({ lesson }: { lesson: LessonData }) {
     )
   }
 
+  // ── OFFLINE ─────────────────────────────────────────────────────────
+  if (stage === 'OFFLINE' && offlineTask) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <header className="bg-white border-b px-6 py-4 flex justify-between items-center">
+          <Link href="/dashboard" className="text-blue-600 hover:underline text-sm">← Назад</Link>
+          <span className="text-sm font-medium text-purple-600">Офлайн-завдання</span>
+        </header>
+
+        <main className="max-w-2xl mx-auto px-4 py-8">
+          {/* Description */}
+          <div className="bg-white rounded-lg border p-6 mb-4">
+            <div className="flex items-center gap-2 mb-3">
+              <span className="text-2xl">📝</span>
+              <span className="text-xs uppercase tracking-wide text-purple-500 font-medium">Офлайн-завдання</span>
+            </div>
+            <p className="text-gray-800 whitespace-pre-wrap">{offlineTask.question}</p>
+          </div>
+
+          {/* Download / Print */}
+          <div className="bg-purple-50 border border-purple-200 rounded-lg p-5 mb-4">
+            <p className="font-medium text-purple-900 mb-1">Крок 1 — Роздрукуй бланк</p>
+            <p className="text-sm text-purple-700 mb-4">
+              Натисни кнопку нижче — відкриється бланк для друку. У новій вкладці натисни «Друкувати».
+            </p>
+            <div className="flex gap-3">
+              <a
+                href="/offline/module-0.pdf"
+                download
+                className="flex-1 flex items-center justify-center gap-2 bg-purple-600 text-white rounded-lg px-4 py-3 hover:bg-purple-700 font-medium"
+              >
+                ⬇ Завантажити PDF
+              </a>
+              <a
+                href="/offline/module-0.pdf"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-2 bg-white border border-purple-300 text-purple-700 rounded-lg px-4 py-3 hover:bg-purple-50 font-medium text-sm"
+              >
+                🔍 Переглянути
+              </a>
+            </div>
+          </div>
+
+          {/* Photo upload */}
+          <div className="bg-white rounded-lg border p-6">
+            <p className="font-medium mb-1">Крок 2 — Здай виконане завдання</p>
+            <p className="text-sm text-gray-500 mb-4">
+              Розв&apos;яжи задачі на бланку від руки, сфотографуй і завантаж фото нижче.
+            </p>
+
+            {!photoUploaded ? (
+              <div className="flex flex-col gap-3">
+                <label className="flex flex-col items-center justify-center border-2 border-dashed border-gray-300 rounded-lg p-6 cursor-pointer hover:border-blue-400 hover:bg-blue-50 transition-colors">
+                  <span className="text-3xl mb-2">📷</span>
+                  <span className="text-sm text-gray-600">
+                    {photoFile ? photoFile.name : 'Натисни щоб вибрати фото'}
+                  </span>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    capture="environment"
+                    className="hidden"
+                    onChange={(e) => setPhotoFile(e.target.files?.[0] ?? null)}
+                  />
+                </label>
+                {photoFile && (
+                  <button
+                    onClick={uploadPhoto}
+                    disabled={photoUploading}
+                    className="bg-blue-600 text-white rounded-lg px-4 py-3 hover:bg-blue-700 disabled:opacity-50 font-medium"
+                  >
+                    {photoUploading ? 'Завантажую...' : '📤 Надіслати на перевірку'}
+                  </button>
+                )}
+              </div>
+            ) : (
+              <div className="bg-green-50 rounded-lg p-4 text-green-800 text-sm">
+                ✅ Фото надіслано! Результат з&apos;явиться після перевірки.
+              </div>
+            )}
+          </div>
+
+          {photoUploaded && (
+            <button
+              onClick={() => setStage('COMPLETE')}
+              className="mt-4 w-full bg-blue-600 text-white rounded-lg px-4 py-3 hover:bg-blue-700 font-medium"
+            >
+              Завершити заняття →
+            </button>
+          )}
+        </main>
+      </div>
+    )
+  }
+
   // ── TASKS ───────────────────────────────────────────────────────────
   const isQuiz = currentTask.type === 'QUIZ'
-  const progress = `${taskIdx + 1} / ${lesson.tasks.length}`
+  const progress = `${taskIdx + 1} / ${regularTasks.length}`
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -187,25 +310,62 @@ export default function LessonClient({ lesson }: { lesson: LessonData }) {
           )}
 
           {/* Practice: input */}
-          {!isQuiz && !submitted && (
-            <div className="flex gap-2">
-              <input
-                type="text"
-                value={answer}
-                onChange={(e) => setAnswer(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && answer && submitAnswer(answer)}
-                placeholder="Введи відповідь..."
-                className="flex-1 border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-              <button
-                onClick={() => submitAnswer(answer)}
-                disabled={!answer}
-                className="bg-blue-600 text-white rounded-lg px-4 py-2 hover:bg-blue-700 disabled:opacity-40"
-              >
-                Відповісти
-              </button>
-            </div>
-          )}
+          {!isQuiz && !submitted && (() => {
+            const isTime = /^\d{1,2}:\d{2}$/.test(currentTask.correctAns ?? '')
+            if (isTime) {
+              const timeReady = timeHours !== '' && timeMinutes !== ''
+              const timeValue = `${timeHours.padStart(2, '0')}:${timeMinutes.padStart(2, '0')}`
+              return (
+                <div className="flex flex-col gap-2">
+                  <p className="text-sm text-gray-500">Введи час виходу:</p>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="number" min="0" max="23"
+                      value={timeHours}
+                      onChange={(e) => setTimeHours(e.target.value)}
+                      placeholder="ГГ"
+                      className="w-20 border rounded-lg px-3 py-2 text-center focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                    <span className="text-xl font-bold text-gray-400">:</span>
+                    <input
+                      type="number" min="0" max="59"
+                      value={timeMinutes}
+                      onChange={(e) => setTimeMinutes(e.target.value)}
+                      placeholder="ХХ"
+                      className="w-20 border rounded-lg px-3 py-2 text-center focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                    <span className="text-sm text-gray-400">год : хв</span>
+                    <button
+                      onClick={() => submitAnswer(timeValue)}
+                      disabled={!timeReady}
+                      className="ml-auto bg-blue-600 text-white rounded-lg px-4 py-2 hover:bg-blue-700 disabled:opacity-40"
+                    >
+                      Відповісти
+                    </button>
+                  </div>
+                </div>
+              )
+            }
+            return (
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={answer}
+                  onChange={(e) => setAnswer(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && answer && submitAnswer(answer)}
+                  placeholder="Введи відповідь..."
+                  className="flex-1 border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+                <button
+                  onClick={() => submitAnswer(answer)}
+                  disabled={!answer}
+                  className="bg-blue-600 text-white rounded-lg px-4 py-2 hover:bg-blue-700 disabled:opacity-40"
+                >
+                  Відповісти
+                </button>
+              </div>
+            )
+          })()}
 
           {/* Practice: result */}
           {!isQuiz && submitted && result && (
@@ -260,11 +420,24 @@ export default function LessonClient({ lesson }: { lesson: LessonData }) {
                 ))}
               </div>
             )}
+            {/* postContent — shown after result, before Next */}
+            {currentTask.postContent && (
+              <div className="bg-blue-50 rounded-lg border border-blue-200 p-5">
+                <p className="text-xs text-blue-600 font-medium mb-3 uppercase tracking-wide">
+                  Пояснення
+                </p>
+                <div className="prose max-w-none text-sm">
+                  <TheoryRenderer text={currentTask.postContent} />
+                </div>
+              </div>
+            )}
             <button
               onClick={nextTask}
               className="w-full bg-blue-600 text-white rounded-lg px-4 py-3 hover:bg-blue-700 font-medium"
             >
-              {taskIdx + 1 >= lesson.tasks.length ? 'Завершити заняття' : 'Наступне завдання →'}
+              {taskIdx + 1 >= regularTasks.length
+                ? offlineTask ? 'Перейти до офлайн-завдання →' : 'Завершити заняття'
+                : 'Наступне завдання →'}
             </button>
           </div>
         )}
@@ -292,7 +465,6 @@ function TheoryRenderer({ text }: { text: string }) {
         </blockquote>
       )
     } else if (line.startsWith('| ')) {
-      // Collect table rows
       const tableLines = []
       let j = i
       while (j < lines.length && lines[j].startsWith('|')) {
@@ -330,7 +502,6 @@ function TheoryRenderer({ text }: { text: string }) {
 }
 
 function InlineRenderer({ text }: { text: string }) {
-  // Bold: **text**, inline code: `text`
   const parts = text.split(/(\*\*[^*]+\*\*|`[^`]+`)/)
   return (
     <>
